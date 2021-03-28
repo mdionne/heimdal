@@ -862,7 +862,8 @@ mk_kx509_req(krb5_context context,
 
     /* Encode the message, prefix `version_2_0', output the result */
     ASN1_MALLOC_ENCODE(Kx509Request, pre_req.data, pre_req.length, &kx509_req, &len, ret);
-    ret = krb5_data_alloc(req, pre_req.length + sizeof(version_2_0));
+    if (ret == 0)
+        ret = krb5_data_alloc(req, pre_req.length + sizeof(version_2_0));
     if (ret == 0) {
         memcpy(req->data, version_2_0, sizeof(version_2_0));
         memcpy(((unsigned char *)req->data) + sizeof(version_2_0),
@@ -1250,7 +1251,9 @@ krb5_kx509(krb5_context context, krb5_ccache cc, const char *realm)
     char *store_exp = NULL;
 
     ret = krb5_kx509_ctx_init(context, &kx509_ctx);
-    if (ret == 0 && realm)
+    if (ret)
+        return ret;
+    if (realm)
         ret = krb5_kx509_ctx_set_realm(context, kx509_ctx, realm);
 
     /*
