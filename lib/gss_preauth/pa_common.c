@@ -69,6 +69,7 @@ _krb5_gss_map_error(OM_uint32 major, OM_uint32 minor)
             ret = KRB5KRB_AP_ERR_BAD_INTEGRITY;
             break;
         }
+        /* fallthrough */
     default:
         ret = KRB5KDC_ERR_PREAUTH_FAILED;
         break;
