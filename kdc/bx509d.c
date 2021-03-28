@@ -620,10 +620,20 @@ static krb5_error_code
 good_bx509(struct bx509_request_desc *r)
 {
     krb5_error_code ret;
+    const char *fn;
     size_t bodylen;
     void *body;
 
-    ret = rk_undumpdata(strchr(r->pkix_store, ':') + 1, &body, &bodylen);
+    /*
+     * This `fn' thing is just to quiet linters that think "hey, strchr() can
+     * return NULL so...", but here we've build `r->pkix_store' and know it has
+     * a ':'.
+     */
+    if (r->pkix_store == NULL)
+        return bad_503(r, EINVAL, "Internal error"); /* Quiet warnings */
+    fn = strchr(r->pkix_store, ':');
+    fn = fn ? fn + 1 : r->pkix_store;
+    ret = rk_undumpdata(fn, &body, &bodylen);
     if (ret)
         return bad_503(r, ret, "Could not recover issued certificate "
                        "from PKIX store");
@@ -785,6 +795,7 @@ do_CA(struct bx509_request_desc *r, const char *csr)
     /* Set CSR */
     if ((d.data = malloc(strlen(csr2))) == NULL) {
         krb5_free_principal(r->context, p);
+        free(csr2);
         return bad_enomem(r, ENOMEM);
     }
 
@@ -832,11 +843,9 @@ do_CA(struct bx509_request_desc *r, const char *csr)
 
     ret = store_certs(r->context->hx509ctx, r->pkix_store, certs, NULL);
     hx509_certs_free(&certs);
-    if (ret) {
-        (void) unlink(strchr(r->pkix_store, ':') + 1);
-        return bad_500(r, ret,
-                       "Failed convert issued certificate and chain to PEM");
-    }
+    if (ret)
+        return bad_500(r, ret, "Failed to convert issued"
+                       " certificate and chain to PEM");
     return 0;
 }
 
@@ -932,8 +941,17 @@ clean_req_desc(struct bx509_request_desc *r)
 {
     if (!r)
         return;
-    if (r->pkix_store)
-        (void) unlink(strchr(r->pkix_store, ':') + 1);
+    if (r->pkix_store) {
+        const char *fn = strchr(r->pkix_store, ':');
+
+        /*
+         * This `fn' thing is just to quiet linters that think "hey, strchr() can
+         * return NULL so...", but here we've build `r->pkix_store' and know it has
+         * a ':'.
+         */
+        fn = fn ? fn + 1 : r->pkix_store;
+        (void) unlink(fn);
+    }
     krb5_free_addresses(r->context, &r->tgt_addresses);
     hx509_request_free(&r->req);
     heim_release(r->reason);
@@ -2027,6 +2045,8 @@ main(int argc, char **argv)
 
     argc -= optidx;
     argv += optidx;
+    if (argc != 0)
+        usage(1);
 
     if ((errno = pthread_key_create(&k5ctx, k5_free_context)))
         err(1, "Could not create thread-specific storage");
