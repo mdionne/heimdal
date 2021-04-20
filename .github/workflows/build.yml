@@ -65,3 +65,33 @@ jobs:
                   git ls-files -o|grep -v ^build/
                 fi
 
+    windows:
+        runs-on: windows-latest
+        env:
+            INSTALL_DIR: C:\heimdal
+            WIXDIR: c:\Program Files (x86)\Windows Installer XML v3.5
+            # We're not doing any codesigning in the Appveyor build yet.
+        steps:
+            - name: Clone repository
+              uses: actions/checkout@v1
+            - uses: ilammy/msvc-dev-cmd@v1
+            - name: Setup
+              shell: cmd
+              run: |
+                set PATH=C:\msys64\usr\bin;%PATH%;C:\Python27;C:\Perl64\bin;;C:\Program Files (x86)\HTML Help Workshop;C:\program files (x86)\windows installer xml v3.5\bin;C:\cygwin\bin
+                set CODESIGN_PKT=0000000000000000
+                set dbg__type=Debug
+                mkdir %INSTALL_DIR%
+                pacman --noconfirm -S zstd
+                pacman --noconfirm -S autoconf
+                pacman --noconfirm -S automake
+                pacman --noconfirm -S flex
+                pacman --noconfirm -S bison
+                pacman --noconfirm -S perl
+                pacman --noconfirm -S perl-JSON
+                set PATH=%PATH%;%wix%bin
+                title Heimdal Build %CPU% %dbg__type%
+                echo PATH=%PATH%
+                nmake /f NTMakefile APPVEYOR=1 MAKEINFO=makeinfo NO_INSTALLERS=1
+                nmake /f NTMakefile APPVEYOR=1 MAKEINFO=makeinfo NO_INSTALLERS=1 test
+
