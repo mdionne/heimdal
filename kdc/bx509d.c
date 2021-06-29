@@ -887,7 +887,7 @@ set_req_desc(struct MHD_Connection *connection,
     r->from = r->frombuf;
     r->tgt_addresses.len = 0;
     r->tgt_addresses.val = 0;
-    r->hcontext = r->context->hcontext;
+    r->hcontext = r->context ? r->context->hcontext : NULL;
     r->config = NULL;
     r->logf = logfac;
     r->reqtype = url;
@@ -903,9 +903,11 @@ set_req_desc(struct MHD_Connection *connection,
     r->addr = NULL;
     r->req = NULL;
     r->req_life = 0;
-    r->ret = 0;
+    r->ret = ret;
     r->kv = heim_dict_create(10);
     r->attributes = heim_dict_create(1);
+    if (ret == 0 && (r->kv == NULL || r->attributes == NULL))
+        r->ret = ret = ENOMEM;
     ci = MHD_get_connection_info(connection,
                                  MHD_CONNECTION_INFO_CLIENT_ADDRESS);
     if (ci) {
@@ -929,10 +931,6 @@ set_req_desc(struct MHD_Connection *connection,
 
     }
 
-    if (ret == 0 && r->kv == NULL) {
-        krb5_log_msg(r->context, logfac, 1, NULL, "Out of memory");
-        ret = ENOMEM;
-    }
     return ret;
 }
 
@@ -1078,8 +1076,10 @@ find_ccache(krb5_context context, const char *princ, char **ccname)
      */
     if ((s = princ_fs_encode(princ)) == NULL ||
         asprintf(ccname, "FILE:%s/%s.cc", cache_dir, s) == -1 ||
-        *ccname == NULL)
+        *ccname == NULL) {
+        free(s);
         return ENOMEM;
+    }
     free(s);
 
     if ((ret = krb5_cc_resolve(context, *ccname, &cc))) {
@@ -1106,7 +1106,6 @@ static krb5_error_code
 get_ccache(struct bx509_request_desc *r, krb5_ccache *cc, int *won)
 {
     krb5_error_code ret = 0;
-    struct stat st1, st2;
     char *temp_ccname = NULL;
     const char *fn = NULL;
     time_t life;
@@ -1136,6 +1135,7 @@ get_ccache(struct bx509_request_desc *r, krb5_ccache *cc, int *won)
     if (ret == 0)
         fn = temp_ccname + sizeof("FILE:") - 1;
     if (ret == 0) do {
+        struct stat st1, st2;
         /*
          * Open and flock the temp ccache file.
          *
@@ -1148,6 +1148,8 @@ get_ccache(struct bx509_request_desc *r, krb5_ccache *cc, int *won)
             fd = -1;
         }
         errno = 0;
+        memset(&st1, 0, sizeof(st1));
+        memset(&st2, 0xff, sizeof(st2));
         if (ret == 0 &&
             ((fd = open(fn, O_RDWR | O_CREAT, 0600)) == -1 ||
              flock(fd, LOCK_EX) == -1 ||
@@ -1219,7 +1221,8 @@ do_pkinit(struct bx509_request_desc *r, enum k5_creds_kind kind)
         ret = krb5_cc_new_unique(r->context, "FILE", NULL, &temp_cc);
     }
 
-    ret = krb5_parse_name(r->context, cname, &p);
+    if (ret == 0)
+        ret = krb5_parse_name(r->context, cname, &p);
     if (ret == 0)
         crealm = krb5_principal_get_realm(r->context, p);
     if (ret == 0)
@@ -1720,7 +1723,8 @@ authorize_TGT_REQ(struct bx509_request_desc *r)
         return 0;
 
     ret = krb5_parse_name(r->context, r->cname, &p);
-    ret = hx509_request_init(r->context->hx509ctx, &r->req);
+    if (ret == 0)
+        ret = hx509_request_init(r->context->hx509ctx, &r->req);
     if (ret)
         return bad_500(r, ret, "Out of resources");
     heim_audit_addkv((heim_svc_req_desc)r, KDC_AUDIT_VIS,
@@ -1810,7 +1814,8 @@ get_tgt(struct bx509_request_desc *r)
     ret = r->ret;
 
     /* k5_get_creds() calls bad_req() */
-    ret = k5_get_creds(r, K5_CREDS_EPHEMERAL);
+    if (ret == 0)
+        ret = k5_get_creds(r, K5_CREDS_EPHEMERAL);
     if (ret)
         return ret;
 
