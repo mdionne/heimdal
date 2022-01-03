@@ -86,10 +86,13 @@ _gss_negoex_begin(OM_uint32 *minor, gssspnego_ctx ctx)
 static void
 release_all_mechs(gssspnego_ctx ctx, krb5_context context)
 {
-    struct negoex_auth_mech *mech, *next;
+    struct negoex_auth_mech *mech;
 
-    HEIM_TAILQ_FOREACH_SAFE(mech, &ctx->negoex_mechs, links, next) {
-	_gss_negoex_release_auth_mech(context, mech);
+    while (!HEIM_TAILQ_EMPTY(&ctx->negoex_mechs)) {
+        mech = HEIM_TAILQ_FIRST(&ctx->negoex_mechs);
+        HEIM_TAILQ_REMOVE(&ctx->negoex_mechs, mech, links);
+        _gss_negoex_release_auth_mech(context, mech);
+        mech = NULL;
     }
 
     HEIM_TAILQ_INIT(&ctx->negoex_mechs);
