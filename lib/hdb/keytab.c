@@ -42,7 +42,7 @@ struct hdb_data {
 
 struct hdb_cursor {
     HDB *db;
-    hdb_entry_ex hdb_entry;
+    hdb_entry hdb_entry;
     int first, next;
     int key_idx;
 };
@@ -178,7 +178,7 @@ hdb_get_entry(krb5_context context,
 	      krb5_enctype enctype,
 	      krb5_keytab_entry *entry)
 {
-    hdb_entry_ex ent;
+    hdb_entry ent;
     krb5_error_code ret;
     struct hdb_data *d = id->data;
     const char *dbname = d->dbname;
@@ -223,21 +223,21 @@ hdb_get_entry(krb5_context context,
     }else if(ret)
 	goto out;
 
-    if(kvno && (krb5_kvno)ent.entry.kvno != kvno) {
+    if(kvno && (krb5_kvno)ent.kvno != kvno) {
 	hdb_free_entry(context, db, &ent);
  	ret = KRB5_KT_NOTFOUND;
 	goto out;
     }
     if(enctype == 0)
-	if(ent.entry.keys.len > 0)
-	    enctype = ent.entry.keys.val[0].key.keytype;
+	if(ent.keys.len > 0)
+	    enctype = ent.keys.val[0].key.keytype;
     ret = KRB5_KT_NOTFOUND;
-    for(i = 0; i < ent.entry.keys.len; i++) {
-	if(ent.entry.keys.val[i].key.keytype == enctype) {
+    for(i = 0; i < ent.keys.len; i++) {
+	if(ent.keys.val[i].key.keytype == enctype) {
 	    krb5_copy_principal(context, principal, &entry->principal);
-	    entry->vno = ent.entry.kvno;
+	    entry->vno = ent.kvno;
 	    krb5_copy_keyblock_contents(context,
-					&ent.entry.keys.val[i].key,
+					&ent.keys.val[i].key,
 					&entry->keyblock);
 	    ret = 0;
 	    break;
@@ -333,7 +333,7 @@ hdb_next_entry(krb5_context context,
 	else if (ret)
 	    return ret;
 
-	if (c->hdb_entry.entry.keys.len == 0)
+	if (c->hdb_entry.keys.len == 0)
 	    hdb_free_entry(context, c->db, &c->hdb_entry);
 	else
 	    c->next = FALSE;
@@ -350,7 +350,7 @@ hdb_next_entry(krb5_context context,
 	    return ret;
 
 	/* If no keys on this entry, try again */
-	if (c->hdb_entry.entry.keys.len == 0)
+	if (c->hdb_entry.keys.len == 0)
 	    hdb_free_entry(context, c->db, &c->hdb_entry);
 	else
 	    c->next = FALSE;
@@ -362,14 +362,14 @@ hdb_next_entry(krb5_context context,
      */
 
     ret = krb5_copy_principal(context,
-			      c->hdb_entry.entry.principal,
+			      c->hdb_entry.principal,
 			      &entry->principal);
     if (ret)
 	return ret;
 
-    entry->vno = c->hdb_entry.entry.kvno;
+    entry->vno = c->hdb_entry.kvno;
     ret = krb5_copy_keyblock_contents(context,
-				      &c->hdb_entry.entry.keys.val[c->key_idx].key,
+				      &c->hdb_entry.keys.val[c->key_idx].key,
 				      &entry->keyblock);
     if (ret) {
 	krb5_free_principal(context, entry->principal);
@@ -383,7 +383,7 @@ hdb_next_entry(krb5_context context,
      * next entry
      */
 
-    if ((size_t)c->key_idx == c->hdb_entry.entry.keys.len) {
+    if ((size_t)c->key_idx == c->hdb_entry.keys.len) {
 	hdb_free_entry(context, c->db, &c->hdb_entry);
 	c->next = TRUE;
 	c->key_idx = 0;
