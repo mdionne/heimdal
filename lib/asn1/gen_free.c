@@ -127,7 +127,7 @@ free_type (const char *name, const Type *t, int preserve)
     case TSequenceOf: {
 	char *n;
 
-	fprintf (codefile, "while((%s)->len){\n", name);
+	fprintf (codefile, "if ((%s)->val)\nwhile((%s)->len){\n", name, name);
 	if (asprintf (&n, "&(%s)->val[(%s)->len-1]", name, name) < 0 || n == NULL)
 	    errx(1, "malloc");
 	free_type(n, t->subtype, FALSE);
